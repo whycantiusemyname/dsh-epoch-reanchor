@@ -1,0 +1,4 @@
+# Installing the bundle only makes this package resolvable from user presets.
+# Each preset mounts its own isolated compaction provider; no process-global
+# service or AgentLoop replacement is installed here.
+[]

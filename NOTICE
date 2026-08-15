@@ -1,0 +1,24 @@
+dsh-epoch-reanchor is an independent community project.
+
+The compaction provider in src/index.ts, src/config.ts, src/region.ts,
+src/summarizer.ts, src/types.ts, and src/invariant.ts is derived from
+DeepSeek Harness:
+
+  https://github.com/deepseek-ai/deepseek-harness
+  commit 47f943859bef60e4160492346772ded9b24f765a
+  package packages/compaction/compaction-basic
+
+DeepSeek Harness is distributed under the MIT License:
+
+  Copyright (c) 2026 DeepSeek
+
+The full MIT permission notice is included in LICENSE.
+
+The RL-interface preset experiments in
+
+  https://github.com/xiaobright/dsh-anchored-standard
+
+informed the hypothesis and A/B design. This package is not a fork of that
+project and contains no inherited code or repository history from it.
+The two A/B modes differ only in whether reasoning blocks from the official
+retained tail are included in the recast user-context record.
