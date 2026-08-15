@@ -1,52 +1,104 @@
 # dsh-epoch-reanchor
 
-An independent experimental DeepSeek Harness plugin that turns compaction into a fresh model conversation while keeping the same Session, raw event log, UI transcript, routing, and workspace.
+`dsh-epoch-reanchor` is an experimental compaction provider for DeepSeek Harness (DSH). It treats compaction as the end of one model trajectory and starts a new trajectory epoch inside the same Session using an ordinary handoff task.
 
-It does **not** replace AgentLoop. The provider is copied from the official `dsh-compaction-basic` implementation and minimally changed so that:
+Session identity, workspace, routing, raw events, UI transcript, statistics, and telemetry remain continuous. Only the model-visible message surface is replaced. The plugin does not replace the official AgentLoop or inherit a Standard-preset promotion state machine.
 
-1. the official pressure and retained-tail split is preserved;
-2. the older head is summarized with the official cache-replay strategy;
-3. the official retained tail is mechanically recast as numbered user-provided records;
-4. the complete current surface is replaced by one ordinary user handoff;
-5. the next request starts with the official Minimal system and two-tool composition.
+> [!IMPORTANT]
+> This project is an experiment. No large-scale evaluation currently proves that either tail-reasoning mode is generally better or that the resulting behavior matches an undisclosed RL post-training distribution.
+
+## Highlights
+
+- Minimally modified from the official `dsh-compaction-basic` provider.
+- Keeps official pressure measurement, retention selection, tool-pair balancing, overflow retry, pruning, and durable transaction behavior.
+- Reuses the official cache-friendly summary replay strategy.
+- Replaces the complete current model surface with one ordinary user-role handoff.
+- Recasts the official retained tail as chronological records without evidence filtering.
+- Ships two otherwise-identical A/B presets for including or removing tail reasoning.
+- Leaves the official AgentLoop unchanged.
+- Uses the copied official Minimal composition on POSIX.
+- Marks the process-per-call Windows Git Bash implementation as degraded compatibility mode.
+
+## How it works
+
+```text
+One DSH Session
+
+Epoch N
+  official Minimal system + tools
+  append-only user / assistant / tool trajectory
+        │
+        │ context pressure or manual compact
+        ▼
+  official head/tail boundary
+        ├─ older head → handoff summary
+        └─ recent tail → numbered records
+        │
+        ▼
+  replace the complete model-visible surface
+        │
+        ▼
+Epoch N+1
+  official Minimal system + tools
+  one ordinary user handoff
+  new append-only trajectory
+```
+
+The previous raw events are not deleted. DSH continues to use the durable log for transcript, statistics, and telemetry. The replacement changes only the surface returned to the model by Session projection.
 
 ## A/B presets
 
-| Preset | Tail reasoning |
-|---|---|
-| `epoch-reanchor-no-reasoning` | Removed from the recast tail |
-| `epoch-reanchor-with-reasoning` | Included under `Reasoning:` records |
+| Preset ID | `includeTailReasoning` | Retained-tail behavior |
+|---|---:|---|
+| `epoch-reanchor-no-reasoning` | `false` | Removes assistant reasoning blocks |
+| `epoch-reanchor-with-reasoning` | `true` | Includes reasoning under `Reasoning:` records |
 
-The two copied Minimal preset files are tested to be identical except for `includeTailReasoning`.
+The two `agent.cordis.yml` files are tested to be identical except for this Boolean value.
 
-## Model-visible result
+The retained tail is selected by the official token-budget algorithm, not by a fixed message count. User input, plugin context, assistant text, tool calls, tool results, errors, and image attachments retain their selected membership, order, and content. Only message roles and provider tool-protocol structure are flattened into ordinary records.
+
+## Model-visible restart
+
+The first request of a new epoch contains:
 
 ```text
 System: You are a helpful software engineer assistant.
-Tools:  persistent bash + str_replace_editor
+Tools:  bash + str_replace_editor
 User:   earlier task state + recent interaction records
 ```
 
-No `<compacted-summary>` framing, raw assistant/tool tail, Standard tool catalog, runtime snapshot, AGENTS digest, or skill catalog is added.
+It does not continue the old assistant/tool-role trajectory and does not add `<compacted-summary>`, compaction identifiers, Standard tools, runtime snapshots, AGENTS/CLAUDE digests, or skill-catalog injections.
 
-The replacement retains the official `compactCheckpointSource(compactionId)` internally for durable correlation and existing UI presentation. Message source metadata is not sent to the model.
+The durable replacement still uses the official `compactCheckpointSource(compactionId)` for compaction and UI correlation. Message source metadata is not model content.
 
-## Cache behavior
+## KV-cache behavior
 
-Within an epoch, history remains append-only. The handoff request replays the old system, tools, and summarized head before appending the compaction instruction, matching the official cache-friendly design.
+History remains append-only within each epoch. The summary request replays the old system, tools, and summarized head before appending a fixed compaction instruction, matching the official cache-replay design.
 
-After official compaction, the conversation already diverges at the first replaced history token, so a retained raw tail normally cannot reuse its previous prefix KV. Recasting the same tail into the new user task does not discard a separately reusable old-conversation prefix under ordinary prefix caching. Provider cache lifetime and pricing remain provider-controlled.
+After the epoch boundary, the first history message differs because the surface has been replaced. Under ordinary prefix caching, the old conversation tail cannot reuse its previous KV state; the stable system/tools prefix may still be reusable. Official checkpoint compaction also diverges near the beginning of history, so the additional cache difference is concentrated at the boundary rather than every step.
+
+Actual cache hits, lifetime, and pricing are provider-controlled and must be measured through adapter telemetry when available.
 
 ## Install
 
-Install directly from this public repository into the `web` profile:
+Requirements:
+
+- Node.js `^22.19.0` or `>=24`;
+- DeepSeek Harness `0.1.0-rc.6` APIs;
+- a target profile containing the official base bundle and agent-preset roster.
+
+Install from GitHub into the `web` profile:
 
 ```powershell
 dsh plugin --profile web add github:whycantiusemyname/dsh-epoch-reanchor
 dsh plugin --profile web exec dsh-epoch-reanchor install-presets
 ```
 
-Or install from a local checkout:
+Replace `web` with the profile you use. pnpm may print peer-dependency warnings for official DSH packages supplied by the Harness installation fallback; the public GitHub installation path is covered by a loader smoke test.
+
+The bundle patch is intentionally empty. Installing the bundle only makes the package resolvable from the profile. Each agent preset mounts its own isolated compaction provider, so no process-global AgentLoop or compaction provider is installed.
+
+Install from a local checkout:
 
 ```powershell
 git clone https://github.com/whycantiusemyname/dsh-epoch-reanchor.git
@@ -57,20 +109,59 @@ dsh plugin --profile web add .
 dsh plugin --profile web exec dsh-epoch-reanchor install-presets
 ```
 
-Replace `web` with the profile you actually use. The bundle patch is intentionally empty: installation only makes the package resolvable from that profile, while each agent preset mounts its own isolated compaction provider. No process-global AgentLoop or compaction service is replaced.
+Restart DSH, create a blank Session, and select one of the two Epoch Re-anchor presets. Do not switch a Session that has already produced messages between presets.
 
-Restart DSH, create a new blank Session, and choose one A/B preset. Do not switch an existing long-running Session between presets.
+## Management
 
-Remove the preset directories with:
+```text
+dsh plugin --profile web exec dsh-epoch-reanchor status
+dsh plugin --profile web exec dsh-epoch-reanchor paths
+```
+
+Uninstall:
 
 ```text
 dsh plugin --profile web exec dsh-epoch-reanchor remove-presets
 dsh plugin --profile web remove dsh-epoch-reanchor
 ```
 
-## Platform note
+Sessions that depend on these presets may no longer recompose after removal. Keep the package and preset directories while those Sessions still need to resume.
 
-POSIX uses the copied official persistent PTY Bash and bare local editor composition. Windows uses a clearly marked process-per-call Git Bash compatibility tool and must not be reported as an exact reproduction of the POSIX RL interface.
+## Default configuration
+
+```yaml
+- id: epoch-compaction
+  name: dsh-epoch-reanchor
+  config:
+    thresholdRatio: 0.8
+    retainRatio: 0.16
+    includeTailReasoning: false # or true
+    includeSubagents: false
+    auto: true
+```
+
+The provider also retains the official `retainTokens`, summary route, generation cap, retry, overflow retry, and exact-model policy fields.
+
+For a clean A/B test, keep model, provider, reasoning effort, repository state, task, threshold, retention budget, summary route, and permission mode fixed. Use a fresh Session for each preset.
+
+## Platform behavior
+
+POSIX uses the copied official persistent PTY Bash and bare `fs-local` editor composition.
+
+Windows uses a process-per-call Git Bash compatibility tool. Its model-visible name remains `bash`, but shell state is not persistent across calls. Windows results must not be reported as an exact reproduction of the POSIX Minimal runtime. Change `windows-bash.config.bashPath` if Git Bash is not installed at:
+
+```text
+C:\Program Files\Git\bin\bash.exe
+```
+
+## Failure behavior
+
+- A failed summary does not replace the current surface.
+- The durable transaction records a failed `compaction/end`.
+- Pressure-compaction failure allows the current turn to continue.
+- Overflow recovery retries only after durable surface progress.
+- A replacement that is not smaller than the shadowed content is rejected.
+- Delegated subagents skip automatic epoch compaction by default.
 
 ## Verification
 
@@ -79,12 +170,27 @@ npm test
 npm pack --dry-run
 ```
 
-Tests cover the official tail cutoff, complete-surface replacement, both reasoning modes, tool-call/result recasting, repeated compaction, default subagent exclusion, summary failure, and single-variable preset parity.
+Tests cover the official retained-tail cutoff, complete-surface replacement, both reasoning modes, tool-call/result recasting, repeated compaction, Session continuity, default subagent exclusion, summary failure, single-variable preset parity, and the absence of a global AgentLoop or compaction installation.
 
-## Evidence and attribution
+The published repository has also been smoke-tested through real `dsh plugin ... add github:` installation, CLI preset management, packed-package installation, and both preset compositions in the real DSH Loader.
 
-Official source baseline: [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness), commit `47f943859bef60e4160492346772ded9b24f765a`, especially the official Minimal preset, `dsh-compaction`, `dsh-compaction-basic`, and Session surface implementation.
+## Limitations
 
-The community reference is [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard), including its `anchored-standard`, `zero-anchored-standard`, and `whoami-standard` experimental presets. This project consulted those RL-interface experiments for observations about model-visible system/tool composition, first-request trajectory, and controlled use of the official Minimal interface. It is not a branch of that repository, contains no copied community code, and does not target a PR to it.
+- No large-scale benchmark establishes the better tail-reasoning mode.
+- Role flattening does not remove semantic or stylistic influence from retained text.
+- History compaction cannot fix an oversized indivisible surface node, system prompt, or tool-schema envelope.
+- Overflow recovery still requires the provider to accept the summary request.
+- Windows compatibility mode is not persistent Bash.
+- DSH is a developer preview; review the official compaction diff and Minimal composition after upgrades.
 
-The claim that user-role tail recasting reduces trajectory carryover is a local hypothesis to test, not an official DeepSeek statement. See [README.zh-CN.md](./README.zh-CN.md) for the full design, limitations, and A/B procedure, and [NOTICE](./NOTICE) for MIT attribution.
+## Sources and attribution
+
+Official baseline: [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness), commit `47f943859bef60e4160492346772ded9b24f765a`, especially `dsh-compaction-basic`, `dsh-compaction`, Session projection, and the official Minimal preset. See the [DSH development guide](https://deepseek-harness.github.io/deepseek-harness/develop/basic/) and [Cordis tutorial](https://deepseek-harness.github.io/deepseek-harness/develop/cordis-tutorial/).
+
+Community experiment reference: [xiaobright/dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard), including its experimental presets studying model-visible system/tool composition, first-request trajectory, and the official Minimal interface.
+
+This repository is not a branch of that community project, contains no copied community code, and does not target a PR to it. See [NOTICE](./NOTICE) for the official MIT attribution.
+
+## License
+
+MIT
