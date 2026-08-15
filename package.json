@@ -1,7 +1,7 @@
 {
   "name": "dsh-epoch-reanchor",
-  "version": "0.1.0",
-  "description": "Official-Minimal trajectory epochs with cache-aware handoff compaction for DeepSeek Harness",
+  "version": "0.2.0",
+  "description": "Minimal epoch bootstrap, full-tool promotion, and hard handoff compaction for DeepSeek Harness",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -14,6 +14,7 @@
       "types": "./lib/windows-bash.d.ts",
       "default": "./lib/windows-bash.js"
     },
+    "./tool-bootstrap": "./preset/tool-bootstrap.mjs",
     "./invariant": {
       "types": "./lib/invariant.d.ts",
       "default": "./lib/invariant.js"
@@ -60,10 +61,10 @@
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
-    "compaction",
-    "agent",
-    "trajectory",
-    "handoff"
+    "context-compaction",
+    "reasoning",
+    "agent-handoff",
+    "deepseek-v4"
   ],
   "license": "MIT",
   "peerDependencies": {

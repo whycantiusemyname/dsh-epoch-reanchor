@@ -324,6 +324,35 @@ test('the packaged A/B presets are identical except for reasoning mode metadata'
   )
 })
 
+test('the packaged presets gate a complete Standard catalog behind the first tool call', async () => {
+  const preset = await readFile(
+    new URL('../preset/epoch-reanchor-no-reasoning/agent.cordis.yml', import.meta.url),
+    'utf8',
+  )
+  const requiredRows = [
+    'dsh-epoch-reanchor/tool-bootstrap',
+    '@deepseek-ai/dsh-agent-instructions',
+    '@deepseek-ai/dsh-tool-pwsh',
+    '@deepseek-ai/dsh-tool-fs',
+    '@deepseek-ai/dsh-tool-fs-search',
+    '@deepseek-ai/dsh-tool-jobs',
+    '@deepseek-ai/dsh-tool-skill',
+    '@deepseek-ai/dsh-tool-goal',
+    '@deepseek-ai/dsh-plan-mode',
+    '@deepseek-ai/dsh-tool-subagent-control',
+    '@deepseek-ai/dsh-tool-subagent',
+    '@deepseek-ai/dsh-tool-workflow',
+    '@deepseek-ai/dsh-tool-ralph',
+    '@deepseek-ai/dsh-tool-ask-user',
+    '@deepseek-ai/dsh-tool-todo',
+    '@deepseek-ai/dsh-tool-web',
+  ]
+  for (const row of requiredRows) assert.match(preset, new RegExp(row.replaceAll('/', '\\/'), 'u'))
+  assert.match(preset, /bootstrapTools: \[bash, str_replace_editor\]/u)
+  assert.ok(preset.indexOf('dsh-epoch-reanchor/tool-bootstrap') < preset.indexOf('@deepseek-ai/dsh-agent-instructions'))
+  assert.ok(preset.indexOf('dsh-epoch-reanchor/tool-bootstrap') < preset.indexOf('@deepseek-ai/dsh-tool-skill'))
+})
+
 test('the bundle installs no process-global AgentLoop or compaction provider', async () => {
   const patch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
   const effective = patch
