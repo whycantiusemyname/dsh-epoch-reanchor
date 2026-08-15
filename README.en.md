@@ -2,12 +2,14 @@
 
 # dsh-epoch-reanchor
 
-`dsh-epoch-reanchor` is an experimental DeepSeek Harness (DSH) plugin. After compaction, it ends the old model trajectory and starts a new epoch inside the same Session using an ordinary handoff task.
+`dsh-epoch-reanchor` is an experimental DeepSeek Harness (DSH) plugin for testing an unproven observation: after context compaction, do the summary and retained trajectory affect whether the model re-enters a chain of thought with visible `We ...` and `Let's ...` traits (called “`We/Let's` traits” below)?
+
+At the compaction boundary, the plugin ends the old model-visible trajectory, recasts the required work state as an ordinary user handoff, and starts a new epoch with the official Minimal system and tools. This design attempts to minimize conditioning from the old assistant, tool, and reasoning trajectory so users can compare post-compaction `We/Let's` traits, tool behavior, and task quality.
 
 Session identity, workspace, raw events, and UI history remain continuous. Only the model-visible message history is rebuilt. The official AgentLoop is not replaced.
 
 > [!IMPORTANT]
-> This project is intended for A/B testing. No large-scale evaluation currently proves that either mode is generally better or that it reproduces an undisclosed RL post-training distribution.
+> `We/Let's` phrases are observable textual traits, not a description of the model's complete internal mechanism. They do not by themselves prove reasoning quality or proximity to an RL post-training distribution. This project is intended for A/B testing, and no large-scale evaluation currently proves that either mode is generally better.
 
 ## How it works
 

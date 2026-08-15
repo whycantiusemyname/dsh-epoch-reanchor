@@ -2,12 +2,14 @@
 
 # dsh-epoch-reanchor
 
-`dsh-epoch-reanchor` 是一个 DeepSeek Harness（DSH）实验插件：每次上下文压缩后，在同一个 Session 内结束旧模型轨迹，并用普通任务交接消息启动新的 Epoch。
+`dsh-epoch-reanchor` 是一个 DeepSeek Harness（DSH）实验插件，主要用于测试一个尚未证实的现象：上下文压缩后，摘要和残留轨迹是否会影响模型重新进入以 `We ...`、`Let's ...` 为外显特征的思维链（下文简称“`We/Let's` 特征”）。
+
+插件在压缩边界结束旧的模型可见轨迹，把必要工作状态改写为一条普通用户交接消息，再以官方 Minimal system 和 tools 启动新 Epoch。这个设计尝试尽量消除旧 assistant、tool 和 reasoning 轨迹的条件化影响，用于比较压缩后 `We/Let's` 特征、工具行为和任务质量的变化。
 
 Session ID、工作目录、原始日志和 UI 历史保持连续；只有模型可见的消息历史被重建。插件不替换官方 AgentLoop。
 
 > [!IMPORTANT]
-> 本项目用于 A/B 实验。目前没有大规模数据证明某个模式普遍更好，也不应把“更接近 RL 后训练分布”视为已证实结论。
+> `We/Let's` 只是可观察的文本特征，不代表模型的完整内部机制，也不能单独证明推理质量或是否接近某种 RL 后训练分布。本项目用于 A/B 实验，目前没有大规模数据证明某个模式普遍更好。
 
 ## 工作方式
 
