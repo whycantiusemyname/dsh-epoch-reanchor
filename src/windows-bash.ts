@@ -1,12 +1,18 @@
+/**
+ * Optional Git Bash compatibility tool for native Windows experiments.
+ * @module dsh-epoch-reanchor/windows-bash
+ */
+
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subprocess'
 
-export const name = 'epoch-windows-bash'
+export const name = 'epoch-windows-git-bash'
 export const inject = ['tools', 'subprocess']
 
 export interface Config {
+  /** Executable name resolved through PATH, or an absolute Git Bash path. */
   bashPath?: string
   timeoutMs?: number
   maxOutputChars?: number
@@ -15,8 +21,9 @@ export interface Config {
 
 const DEFAULT_DESCRIPTION = [
   'Run commands in a bash shell.',
-  '* This Windows compatibility implementation starts a fresh Git Bash process for each call.',
-  '* State does not persist across calls.',
+  '* This optional native-Windows compatibility backend starts a fresh Git Bash process for every call.',
+  '* Shell state does not persist across calls, and Windows path/process semantics still apply.',
+  '* This mode is not an exact reproduction of the official Linux RL environment.',
   '* The command parameter does not need to be XML-escaped.',
   '* Keep output bounded and run long-lived processes in the background.',
 ].join('\n')

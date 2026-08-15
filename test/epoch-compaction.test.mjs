@@ -331,6 +331,7 @@ test('the packaged presets gate a complete Standard catalog behind the first too
   )
   const requiredRows = [
     'dsh-epoch-reanchor/tool-bootstrap',
+    'dsh-epoch-reanchor/windows-bash',
     '@deepseek-ai/dsh-agent-instructions',
     '@deepseek-ai/dsh-tool-pwsh',
     '@deepseek-ai/dsh-tool-fs',
@@ -348,17 +349,20 @@ test('the packaged presets gate a complete Standard catalog behind the first too
     '@deepseek-ai/dsh-tool-web',
   ]
   for (const row of requiredRows) assert.match(preset, new RegExp(row.replaceAll('/', '\\/'), 'u'))
-  assert.match(preset, /bootstrapTools: \[bash, str_replace_editor\]/u)
+  assert.match(preset, /epochReanchorSettings\.windowsShell === 'pwsh'.*'pwsh'.*'bash'/u)
+  assert.match(preset, /ctx\.get\('epochReanchorSettings'\)\?\.windowsShell !== 'git-bash'/u)
+  assert.match(preset, /bashPath: !!js ctx\.epochReanchorSettings\.gitBashPath/u)
   assert.ok(preset.indexOf('dsh-epoch-reanchor/tool-bootstrap') < preset.indexOf('@deepseek-ai/dsh-agent-instructions'))
   assert.ok(preset.indexOf('dsh-epoch-reanchor/tool-bootstrap') < preset.indexOf('@deepseek-ai/dsh-tool-skill'))
 })
 
-test('the bundle installs no process-global AgentLoop or compaction provider', async () => {
+test('the bundle installs only the process-global restart-scoped settings service', async () => {
   const patch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
   const effective = patch
     .split(/\r?\n/u)
     .filter(line => !line.trimStart().startsWith('#'))
     .join('\n')
-    .trim()
-  assert.equal(effective, '[]')
+  assert.match(effective, /id: epoch-reanchor-settings/u)
+  assert.match(effective, /name: dsh-epoch-reanchor\/settings/u)
+  assert.doesNotMatch(effective, /agent-loop|compaction/u)
 })

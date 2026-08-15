@@ -27,8 +27,8 @@ function assemble(listener, agent, tools) {
 
 const catalog = [
   { name: 'bash' },
-  { name: 'str_replace_editor' },
   { name: 'pwsh' },
+  { name: 'str_replace_editor' },
   { name: 'read' },
   { name: 'web_search' },
   { name: 'subagent' },
@@ -38,10 +38,16 @@ test('exports a diagnostic plugin name', () => {
   assert.equal(name, 'epoch-tool-bootstrap')
 })
 
-test('an epoch starts with exactly the official Minimal tool pair', async () => {
+test('the default epoch starts with the POSIX Minimal tool pair', async () => {
   const { listeners } = register()
   const result = await assemble(listeners['system-prompt/assemble'], makeAgent(), catalog)
   assert.deepEqual(result.tools.map(tool => tool.name), ['bash', 'str_replace_editor'])
+})
+
+test('a native Windows epoch can use the official pwsh/editor pair', async () => {
+  const { listeners } = register({ bootstrapTools: ['pwsh', 'str_replace_editor'] })
+  const result = await assemble(listeners['system-prompt/assemble'], makeAgent(), catalog)
+  assert.deepEqual(result.tools.map(tool => tool.name), ['pwsh', 'str_replace_editor'])
 })
 
 test('an assistant reply without tool use does not open the catalog', async () => {

@@ -1,4 +1,5 @@
-# Installing the bundle only makes this package resolvable from user presets.
-# Each preset mounts its own isolated compaction provider; no process-global
-# service or AgentLoop replacement is installed here.
-[]
+# One process-global restart-scoped settings snapshot is shared by every
+# agent-local preset instance. AgentLoop and compaction remain preset-local.
+- insert:
+    - id: epoch-reanchor-settings
+      name: dsh-epoch-reanchor/settings

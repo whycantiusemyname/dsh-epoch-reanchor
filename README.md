@@ -6,6 +6,8 @@
 
 插件在压缩边界结束旧的模型可见轨迹，把必要工作状态改写为一条普通用户交接消息，再以官方 Minimal system 和双工具启动新 Epoch。该 Epoch 第一次实际调用工具后，下一步开放完整 Standard 工具集。这个设计尝试尽量消除旧轨迹影响，同时避免整个任务一直受限于双工具。
 
+除重建模型可见历史外，插件尽量在整个任务中持续复现官方仓库可验证的环境特征：Minimal system、平台 shell/editor bootstrap、首次工具调用后的 Standard 工具面，以及官方 compaction 的 pressure、tail 与 cache-replay 行为。平台本身不具备的语义不会被宣称为“精确复现”。
+
 Session ID、工作目录、原始日志和 UI 历史保持连续；只有模型可见的消息历史被重建。插件不替换官方 AgentLoop。
 
 > [!IMPORTANT]
@@ -15,7 +17,7 @@ Session ID、工作目录、原始日志和 UI 历史保持连续；只有模型
 
 ```text
 Epoch N
-  Minimal system + bash/editor
+  Minimal system + platform shell/editor
   first tool call → full Standard tools
   append-only trajectory
         │
@@ -29,7 +31,7 @@ Epoch N
         │
         ▼
 Epoch N+1
-  Minimal system + bash/editor
+  Minimal system + platform shell/editor
   one ordinary user handoff
   first tool call → full Standard tools
 ```
@@ -40,7 +42,9 @@ Epoch N+1
 
 ```text
 System: You are a helpful software engineer assistant.
-Tools:  bash + str_replace_editor
+Tools:  Linux/macOS: bash + str_replace_editor
+        Windows:     pwsh + str_replace_editor (默认)
+                     bash + str_replace_editor (可选 Git Bash)
 User:   earlier task state + recent interaction records
 ```
 
@@ -116,16 +120,21 @@ dsh plugin --profile web remove dsh-epoch-reanchor
 
 ## 平台说明
 
-- **Linux/macOS**：使用从官方 Minimal preset 复制的 persistent PTY Bash 和 bare `fs-local` editor composition。
-- **Windows**：使用 process-per-call Git Bash compatibility tool，shell state 不跨调用持久，属于 degraded mode。
+- **Linux/macOS**：使用官方 persistent PTY Bash 与 `str_replace_editor`，最接近官方 Minimal RL 接口。
+- **原生 Windows 默认模式**：遵循 DSH 官方平台组合，使用 `pwsh` 与 `str_replace_editor`。它更可靠，但工具 Schema 和执行语义不等同于 Linux Bash。
+- **原生 Windows 可选模式**：在 `$DSH_HOME/settings.yaml` 的 `dsh-epoch-reanchor` 分节把 `windowsShell` 改为 `git-bash`。该模式向模型暴露 `bash` 与 `str_replace_editor`，并保留官方 persistent Bash 的单一 `command` 参数形状，但每次调用都会启动新的 Git Bash 进程。
 
-Windows 默认 Git Bash 路径：
+也可以直接编辑 `$DSH_HOME/settings.yaml`：
 
-```text
-C:\Program Files\Git\bin\bash.exe
+```yaml
+dsh-epoch-reanchor:
+  windowsShell: git-bash
+  gitBashPath: 'C:\Program Files\Git\bin\bash.exe'
 ```
 
-安装位置不同时，请修改 preset 中的 `windows-bash.config.bashPath`。
+`gitBashPath` 默认是 `bash`，会通过 `PATH` 查找。设置标记为 restart 生效，修改后必须完全重启 DSH。Git Bash 仅是语法兼容实验后端，不具备 Linux persistent Bash 的 cwd、环境变量、用户态和进程语义；需要严格控制 RL shell 接口时，应使用 Linux、WSL2 或 Linux 容器。
+
+DSH `0.1.0-rc.6` 的 Web Settings 表单只开放官方 allowlist 中的 namespace，因此第三方 `dsh-epoch-reanchor` 分节目前需在 `settings.yaml` 中编辑。
 
 ## A/B 建议
 
@@ -146,7 +155,8 @@ npm pack --dry-run
 - 如果模型始终不调用工具，该 Epoch 会继续保持双工具；
 - 完整 Standard 工具集开放后是否改变 `We/Let's` 特征，需要通过实验判断；
 - role flattening 不会消除 retained text 的语义影响；
-- Windows compatibility mode 不等同于 persistent Bash；
+- 原生 Windows 的 `pwsh` 模式不等同于 Linux persistent Bash；
+- 可选 Git Bash 模式每次调用启动新进程，也不等同于 Linux persistent Bash；
 - DSH 仍处于 developer preview，升级后需要重新核对官方 API 和 preset composition。
 
 ## 来源

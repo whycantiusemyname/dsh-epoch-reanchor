@@ -6,6 +6,8 @@
 
 At the compaction boundary, the plugin ends the old model-visible trajectory, recasts the required work state as an ordinary user handoff, and starts a new epoch with the official Minimal system and two-tool surface. After the epoch makes its first real tool call, the next step exposes the complete Standard tool catalog. This minimizes prior-trajectory conditioning without restricting the whole task to two tools.
 
+Apart from rebuilding model-visible history, the plugin tries to preserve the official repository's verifiable environment traits throughout the task: the Minimal system, platform shell/editor bootstrap, Standard tool surface after the first tool call, and the official compaction pressure, tail, and cache-replay behavior. It does not claim exact semantics that the host platform cannot provide.
+
 Session identity, workspace, raw events, and UI history remain continuous. Only the model-visible message history is rebuilt. The official AgentLoop is not replaced.
 
 > [!IMPORTANT]
@@ -15,7 +17,7 @@ Session identity, workspace, raw events, and UI history remain continuous. Only 
 
 ```text
 Epoch N
-  Minimal system + bash/editor
+  Minimal system + platform shell/editor
   first tool call → full Standard tools
   append-only trajectory
         │
@@ -29,7 +31,7 @@ Epoch N
         │
         ▼
 Epoch N+1
-  Minimal system + bash/editor
+  Minimal system + platform shell/editor
   one ordinary user handoff
   first tool call → full Standard tools
 ```
@@ -40,7 +42,9 @@ The new epoch starts with:
 
 ```text
 System: You are a helpful software engineer assistant.
-Tools:  bash + str_replace_editor
+Tools:  Linux/macOS: bash + str_replace_editor
+        Windows:     pwsh + str_replace_editor (default)
+                     bash + str_replace_editor (optional Git Bash)
 User:   earlier task state + recent interaction records
 ```
 
@@ -114,16 +118,21 @@ Each epoch deliberately changes the prefix twice: the boundary switches to the M
 
 ## Platforms
 
-- **Linux/macOS:** copied official Minimal persistent PTY Bash and bare `fs-local` editor composition.
-- **Windows:** process-per-call Git Bash compatibility tool. Shell state is not persistent, so this is a degraded mode.
+- **Linux/macOS:** official persistent PTY Bash with `str_replace_editor`, providing the closest match to the official Minimal RL interface.
+- **Native Windows, default:** follows the official DSH platform composition and uses `pwsh` with `str_replace_editor`. It is reliable, but its schema and execution semantics are not equivalent to Linux Bash.
+- **Native Windows, optional:** set `windowsShell` to `git-bash` in the `dsh-epoch-reanchor` section of `$DSH_HOME/settings.yaml`. This exposes `bash` with `str_replace_editor` and retains the official persistent Bash tool's single `command` parameter shape, but starts a fresh Git Bash process for every call.
 
-Default Windows path:
+The equivalent `$DSH_HOME/settings.yaml` section is:
 
-```text
-C:\Program Files\Git\bin\bash.exe
+```yaml
+dsh-epoch-reanchor:
+  windowsShell: git-bash
+  gitBashPath: 'C:\Program Files\Git\bin\bash.exe'
 ```
 
-Change `windows-bash.config.bashPath` when Git Bash is installed elsewhere.
+`gitBashPath` defaults to `bash` and is resolved through `PATH`. These settings apply after a full DSH restart. Git Bash is only a syntax-compatibility experiment backend; it does not reproduce Linux persistent Bash cwd, environment, user-space, or process semantics. Use Linux, WSL2, or a Linux container when strict RL shell-interface control matters.
+
+In DSH `0.1.0-rc.6`, the Web Settings form exposes only namespaces on the official allowlist, so the third-party `dsh-epoch-reanchor` section must currently be edited in `settings.yaml`.
 
 ## A/B guidance
 
@@ -144,7 +153,8 @@ Tests cover full-surface replacement, the official tail boundary, reasoning A/B,
 - If the model never calls a tool, that epoch remains on the two-tool surface.
 - Whether opening the full Standard catalog changes `We/Let's` traits requires testing.
 - Role flattening does not remove semantic influence from retained text.
-- Windows compatibility mode is not persistent Bash.
+- Native Windows `pwsh` mode is not Linux persistent Bash.
+- Optional Git Bash mode starts a fresh process per call and is not Linux persistent Bash either.
 - DSH is a developer preview; recheck APIs and preset composition after upgrades.
 
 ## Sources
