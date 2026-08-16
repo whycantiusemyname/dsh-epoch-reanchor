@@ -5,6 +5,8 @@
  * @module dsh-epoch-reanchor/types
  */
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm';
+/** Which delegated sessions participate in the epoch experiment. */
+export type SubagentEpochMode = 'off' | 'fresh' | 'all';
 /** Policy fields shared by the default policy and exact model overrides. */
 export interface CompactionPolicyConfig {
     /** Compact at this fraction of the model's context window. Defaults to `0.8`. */
@@ -39,7 +41,12 @@ export interface BasicCompactionConfig extends CompactionPolicyConfig {
     auto?: boolean;
     /** Preserve assistant reasoning blocks when the official retained tail is recast as user context. */
     includeTailReasoning?: boolean;
-    /** Apply automatic epoch compaction to delegated child sessions. Defaults to `false`. */
+    /**
+     * Delegated-session policy. `fresh` includes only local children with no
+     * inherited transcript; `all` retains the legacy broad behavior. Defaults to `off`.
+     */
+    subagentMode?: SubagentEpochMode;
+    /** Legacy alias: `true` maps to `subagentMode: all`, `false` to `off`. */
     includeSubagents?: boolean;
 }
 /** Public package name for the minimally modified official provider config. */
@@ -66,7 +73,7 @@ export type ResolvedConfig = ResolvedPolicyFields & ResolvedRetention & {
     readonly modelPolicies: readonly Readonly<ModelCompactPolicyConfig>[];
     readonly auto: boolean;
     readonly includeTailReasoning: boolean;
-    readonly includeSubagents: boolean;
+    readonly subagentMode: SubagentEpochMode;
 };
 /** Fully merged policy for one routed conversation target, before capacity scaling. */
 export type ResolvedTargetPolicy = ResolvedPolicyFields & ResolvedRetention & {

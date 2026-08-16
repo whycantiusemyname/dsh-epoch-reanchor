@@ -16,6 +16,7 @@ import type {
   ResolvedRetention,
   ResolvedTargetPolicy,
 } from './types.ts'
+import { resolveSubagentEpochMode } from './subagent-mode.ts'
 
 /** Default request-pressure fraction for every routed model. */
 const DEFAULT_THRESHOLD_RATIO = 0.8
@@ -41,6 +42,7 @@ const BASIC_COMPACT_CONFIG_KEYS: ReadonlySet<string> = new Set([
   'modelPolicies',
   'auto',
   'includeTailReasoning',
+  'subagentMode',
   'includeSubagents',
 ])
 
@@ -77,9 +79,11 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
     && typeof config.includeTailReasoning !== 'boolean') {
     throw new Error('BasicCompactionConfig: includeTailReasoning must be a boolean')
   }
-  if (config.includeSubagents !== undefined && typeof config.includeSubagents !== 'boolean') {
-    throw new Error('BasicCompactionConfig: includeSubagents must be a boolean')
-  }
+  const subagentMode = resolveSubagentEpochMode(
+    config.subagentMode,
+    config.includeSubagents,
+    'BasicCompactionConfig',
+  )
 
   const thresholdRatio = config.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO
   const retention = resolveRetention(config, { retainRatio: DEFAULT_RETAIN_RATIO })
@@ -104,7 +108,7 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
     modelPolicies,
     auto: config.auto ?? true,
     includeTailReasoning: config.includeTailReasoning ?? false,
-    includeSubagents: config.includeSubagents ?? false,
+    subagentMode,
   })
 }
 

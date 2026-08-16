@@ -101,6 +101,31 @@ test('subagents receive the full catalog immediately by default', async () => {
   assert.equal(result.tools, catalog)
 })
 
+test('fresh local subagents use the Minimal pair and promote independently', async () => {
+  const { listeners } = register({ subagentMode: 'fresh' })
+  const agent = makeAgent([], { origin: 'subagent', delegationDepth: 1 })
+  assert.deepEqual(
+    (await assemble(listeners['system-prompt/assemble'], agent, catalog)).tools.map(tool => tool.name),
+    ['bash', 'str_replace_editor'],
+  )
+  listeners['session/event'](agent.session, {
+    type: 'tool/call',
+    seq: 1,
+    data: { name: 'bash' },
+  })
+  assert.equal((await assemble(listeners['system-prompt/assemble'], agent, catalog)).tools, catalog)
+})
+
+test('fork-seeded subagents remain outside fresh mode', async () => {
+  const { listeners } = register({ subagentMode: 'fresh' })
+  const agent = makeAgent([], {
+    origin: 'subagent',
+    delegationDepth: 1,
+    seedLength: 12,
+  })
+  assert.equal((await assemble(listeners['system-prompt/assemble'], agent, catalog)).tools, catalog)
+})
+
 test('automatic instruction and skill messages are suppressed only before tool use', async () => {
   const { listeners, hookOptions } = register()
   assert.deepEqual(hookOptions['agent/pre-step'], { prepend: true })
@@ -127,8 +152,26 @@ test('missing bootstrap tools fail open instead of bricking the session', async 
   assert.equal(warnings.length, 1)
 })
 
+test('a fresh child with a restricted bootstrap pair fails loud', async () => {
+  const { listeners } = register({ subagentMode: 'fresh' })
+  const incomplete = [{ name: 'bash' }, { name: 'read' }]
+  await assert.rejects(
+    assemble(
+      listeners['system-prompt/assemble'],
+      makeAgent([], { origin: 'subagent', delegationDepth: 1 }),
+      incomplete,
+    ),
+    /missing required bootstrap tools/u,
+  )
+})
+
 test('invalid configuration is rejected at mount time', () => {
   assert.throws(() => register({ bootstrapTools: [] }), /bootstrapTools/)
   assert.throws(() => register({ includeSubagents: 'yes' }), /includeSubagents/)
+  assert.throws(() => register({ subagentMode: 'spawn' }), /subagentMode/)
+  assert.throws(
+    () => register({ subagentMode: 'fresh', includeSubagents: true }),
+    /mutually exclusive/,
+  )
   assert.throws(() => register({ promoteOn: 'tool-call' }), /unknown config key/)
 })

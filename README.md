@@ -8,6 +8,8 @@
 
 除重建模型可见历史外，插件尽量在整个任务中持续复现官方仓库可验证的环境特征：Minimal system、平台 shell/editor bootstrap、首次工具调用后的 Standard 工具面，以及官方 compaction 的 pressure、tail 与 cache-replay 行为。平台本身不具备的语义不会被宣称为“精确复现”。
 
+没有继承父对话轨迹的本地子 Agent 也使用同一套 Epoch 规则。若子 Agent 配置了专属 Persona，插件保持 system 为 Minimal，并把 Persona 确定性地放到普通 user task/handoff 末尾；Persona 同时保存在模型不可见的 Agent 状态中，以便每次压缩后恢复。
+
 Session ID、工作目录、原始日志和 UI 历史保持连续；只有模型可见的消息历史被重建。插件不替换官方 AgentLoop。
 
 > [!IMPORTANT]
@@ -49,6 +51,13 @@ User:   earlier task state + recent interaction records
 ```
 
 首次 durable `tool/call` 后，下一次请求开放官方 Standard preset 的工具集；成功 compaction 后，工具门重新回到双工具状态。首个请求会抑制自动 AGENTS digest 和 skill catalog，开放工具后恢复；`<compacted-summary>`、compaction 内部说明和 runtime snapshot 始终不会注入。
+
+### 子 Agent 边界
+
+- 本地 fresh child（通常是 `spawn`）从 Minimal system 和平台双工具开始；首次工具调用后只开放 `toolFilter` 允许的完整工具集。
+- 专属 Persona 作为较低优先级的 user-role 任务条件，而不是 system 指令。这是刻意保留的实验变量，不等价于官方 Persona 语义。
+- 如果 `toolFilter` 移除了 bootstrap pair 中任一工具，实验 child 会显式失败，不会静默产生一条未对齐轨迹。
+- 带父轨迹 seed 的 `fork` 以及 Codex、Claude Code、ACP 等外部 provider 保持官方行为，不计入 fresh-epoch 对照。
 
 ## 两种 A/B 模式
 
@@ -147,7 +156,7 @@ npm test
 npm pack --dry-run
 ```
 
-当前测试覆盖 full-surface replacement、官方 tail boundary、reasoning A/B、tool record 转换、多次 compaction、失败回滚、Epoch 工具门、完整工具开放和 preset 单变量一致性。
+当前测试还覆盖 fresh child 的 Minimal system、Persona 后置与跨 Epoch 恢复、独立工具门、`toolFilter` 失败、fork 隔离和 preset 单变量一致性。
 
 ## 已知限制
 
@@ -155,6 +164,8 @@ npm pack --dry-run
 - 如果模型始终不调用工具，该 Epoch 会继续保持双工具；
 - 完整 Standard 工具集开放后是否改变 `We/Let's` 特征，需要通过实验判断；
 - role flattening 不会消除 retained text 的语义影响；
+- user-role Persona 的遵循度可能低于官方 system Persona；
+- fork 和外部 provider 不属于 fresh Subagent Epoch 实验；
 - 原生 Windows 的 `pwsh` 模式不等同于 Linux persistent Bash；
 - 可选 Git Bash 模式每次调用启动新进程，也不等同于 Linux persistent Bash；
 - DSH 仍处于 developer preview，升级后需要重新核对官方 API 和 preset composition。

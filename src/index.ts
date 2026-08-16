@@ -36,6 +36,7 @@ import type {
   ModelCompactPolicyConfig,
   ResolvedConfig,
 } from './types.ts'
+import { includesSessionInEpochMode } from './subagent-mode.ts'
 
 export type {
   BasicCompactionConfig,
@@ -46,9 +47,23 @@ export type {
   ResolvedConfig,
   ResolvedRetention,
   ResolvedTargetPolicy,
+  SubagentEpochMode,
 } from './types.ts'
 export { frameSummary, serializeRecentTail } from './summarizer.ts'
 export { selectCompactableEpoch, selectCompactableRange } from './region.ts'
+export {
+  deferredPersonaFooter,
+  deferredPersonaOf,
+  MINIMAL_PERSONA,
+  ROLE_GUIDANCE_HEADING,
+  stripDeferredPersonaFooter,
+} from './subagent-epoch.ts'
+export {
+  includesSessionInEpochMode,
+  isFreshLocalSubagent,
+  isLocalSubagentSession,
+  resolveSubagentEpochMode,
+} from './subagent-mode.ts'
 
 /** The region transaction's view of this service's dynamically dispatched summarizer. */
 type RegionSummarize = (input: SummarizationInput, agent: Agent, signal?: AbortSignal) => Promise<SummaryResult>
@@ -83,6 +98,7 @@ const summarizationModelSchema = z.string()
 const maxTokensSchema = z.number().step(1).min(1)
 const compactionRetriesSchema = z.number().step(1).min(0)
 const maxOverflowRetriesSchema = z.number().step(1).min(0)
+const subagentModeSchema = z.union(['off', 'fresh', 'all'] as const)
 
 const modelPolicy: z<ModelCompactPolicyConfig> = z.object({
   provider: z.string().required(),
@@ -120,6 +136,7 @@ export class EpochCompactionEngine extends CompactionEngine {
     modelPolicies: z.array(modelPolicy),
     auto: z.boolean(),
     includeTailReasoning: z.boolean(),
+    subagentMode: subagentModeSchema,
     includeSubagents: z.boolean(),
   })
 
@@ -267,7 +284,7 @@ export class EpochCompactionEngine extends CompactionEngine {
     trigger: CompactionTrigger,
     signal: AbortSignal,
   ): Promise<CompactionResult | null> {
-    if (!this.config.includeSubagents && (agent.session.header.delegationDepth ?? 0) > 0) {
+    if (!includesSessionInEpochMode(agent.session, this.config.subagentMode)) {
       return null
     }
     const target = routedTarget(agent.session)

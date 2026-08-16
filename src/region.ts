@@ -24,6 +24,7 @@ import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { frameSummary } from './summarizer.ts'
 import type { SummarizationInput, SummaryResult } from './summarizer.ts'
+import { deferredPersonaOf } from './subagent-epoch.ts'
 
 interface RegionDependencies {
   readonly meter: TokenMeter
@@ -431,6 +432,7 @@ async function summarizeCompaction(
     summaryResult.summary,
     prepared.tailMessages,
     dependencies.includeTailReasoning,
+    deferredPersonaOf(agent.session),
   )
   const checkpointMessage = createUserMessage({
     content: landedSummary,

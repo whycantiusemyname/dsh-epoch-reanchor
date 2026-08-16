@@ -62,8 +62,8 @@ export declare function summarizeWithLlm(ctx: Context, config: SummaryConfig, in
  * records. Membership, order, text, tool arguments, results, and attachments
  * are preserved; only conversation roles and tool protocol structure change.
  */
-export declare function serializeRecentTail(messages: readonly Message[], includeReasoning: boolean): ContentBlock[];
+export declare function serializeRecentTail(messages: readonly Message[], includeReasoning: boolean, deferredPersona?: string): ContentBlock[];
 /** Build the one ordinary user task that starts the next trajectory epoch. */
-export declare function frameSummary(summary: readonly ContentBlock[], recentTail?: readonly Message[], includeReasoning?: boolean): ContentBlock[];
+export declare function frameSummary(summary: readonly ContentBlock[], recentTail?: readonly Message[], includeReasoning?: boolean, deferredPersona?: string): ContentBlock[];
 export {};
 //# sourceMappingURL=summarizer.d.ts.map

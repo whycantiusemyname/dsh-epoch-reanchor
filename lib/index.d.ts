@@ -12,9 +12,11 @@ import type { Agent } from '@deepseek-ai/dsh-agent';
 import type { CommandId } from '@deepseek-ai/dsh-commands/brand';
 import type { SummarizationInput, SummaryResult } from './summarizer.ts';
 import type { BasicCompactionConfig, ResolvedConfig } from './types.ts';
-export type { BasicCompactionConfig, EpochCompactionConfig, CompactionPolicyConfig, ModelCompactPolicyConfig, ResolvedCompactSpec, ResolvedConfig, ResolvedRetention, ResolvedTargetPolicy, } from './types.ts';
+export type { BasicCompactionConfig, EpochCompactionConfig, CompactionPolicyConfig, ModelCompactPolicyConfig, ResolvedCompactSpec, ResolvedConfig, ResolvedRetention, ResolvedTargetPolicy, SubagentEpochMode, } from './types.ts';
 export { frameSummary, serializeRecentTail } from './summarizer.ts';
 export { selectCompactableEpoch, selectCompactableRange } from './region.ts';
+export { deferredPersonaFooter, deferredPersonaOf, MINIMAL_PERSONA, ROLE_GUIDANCE_HEADING, stripDeferredPersonaFooter, } from './subagent-epoch.ts';
+export { includesSessionInEpochMode, isFreshLocalSubagent, isLocalSubagentSession, resolveSubagentEpochMode, } from './subagent-mode.ts';
 /**
  * Dependency-light compaction backend using `ctx.tokenMeter` for pressure,
  * retention, cited source events, and summary-convergence pricing.

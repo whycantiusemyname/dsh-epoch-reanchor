@@ -4,13 +4,18 @@
 # first durable tool call opens the complete Standard catalog. A successful
 # compaction closes the gate for the next epoch.
 
+- id: subagent-epoch
+  name: dsh-epoch-reanchor/subagent-epoch
+  config:
+    mode: fresh
+
 - id: tool-bootstrap
   name: dsh-epoch-reanchor/tool-bootstrap
   inject: [epochReanchorSettings]
   config:
     bootstrapTools: !!js "process.platform === 'win32' && ctx.epochReanchorSettings.windowsShell === 'pwsh' ? ['pwsh', 'str_replace_editor'] : ['bash', 'str_replace_editor']"
     suppressedContextSources: [agent-instructions, skill-catalog]
-    includeSubagents: false
+    subagentMode: fresh
 
 - id: persona
   name: '@deepseek-ai/dsh-persona'
@@ -155,7 +160,7 @@
         thresholdRatio: 0.8
         retainRatio: 0.16
         includeTailReasoning: false
-        includeSubagents: false
+        subagentMode: fresh
         auto: true
 
     - id: command-compact

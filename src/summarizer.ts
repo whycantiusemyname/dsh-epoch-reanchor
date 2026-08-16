@@ -11,6 +11,10 @@ import type {
   ContentBlock, FinishReason, GenerateOptions, Message, TokenUsage, ToolSchema,
 } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import {
+  deferredPersonaFooter,
+  stripDeferredPersonaFooter,
+} from './subagent-epoch.ts'
 
 interface SummaryConfig {
   readonly summarizationProvider: string
@@ -57,6 +61,7 @@ const COMPACTION_INSTRUCTION = [
   'Rules:',
   '- Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.',
   '- Capture user feedback and explicit instructions faithfully, especially corrections.',
+  '- A trailing "Role guidance for this delegated task" block is external agent identity. Do not copy it into the checkpoint; the caller reattaches it deterministically.',
   '- Do NOT mention this summarization request or that the context was compacted.',
   '- Output only the checkpoint text: do not call any tool or take any other action.',
 ].join('\n')
@@ -275,11 +280,12 @@ function appendSerializedBlock(
 export function serializeRecentTail(
   messages: readonly Message[],
   includeReasoning: boolean,
+  deferredPersona?: string,
 ): ContentBlock[] {
   const output: ContentBlock[] = []
   for (const [index, message] of messages.entries()) {
     appendText(output, `${index + 1}. ${messageLabel(message)}:\n`)
-    for (const block of message.content) {
+    for (const block of stripDeferredPersonaFooter(message.content, deferredPersona)) {
       appendSerializedBlock(output, block, includeReasoning)
     }
     appendText(output, '\n')
@@ -292,13 +298,15 @@ export function frameSummary(
   summary: readonly ContentBlock[],
   recentTail: readonly Message[] = [],
   includeReasoning = false,
+  deferredPersona?: string,
 ): ContentBlock[] {
   const output: ContentBlock[] = [{ type: 'text', text: `${HANDOFF_PREFIX}\n` }, ...summary]
   if (recentTail.length > 0) {
     appendText(output, `\n\n${RECENT_RECORDS_HEADING}\n\n`)
-    for (const block of serializeRecentTail(recentTail, includeReasoning)) output.push(block)
+    for (const block of serializeRecentTail(recentTail, includeReasoning, deferredPersona)) output.push(block)
   }
   appendText(output, `\n${HANDOFF_SUFFIX}`)
+  if (deferredPersona !== undefined) appendText(output, deferredPersonaFooter(deferredPersona))
   return output
 }
 

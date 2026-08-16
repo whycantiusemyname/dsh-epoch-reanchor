@@ -15,6 +15,7 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 
 import EpochCompactionEngine, {
+  deferredPersonaFooter,
   selectCompactableEpoch,
   selectCompactableRange,
   serializeRecentTail,
@@ -70,7 +71,7 @@ function appendAssistant(session, turn, step, content) {
   }, { surfaceOp: 'append' })
 }
 
-function conversation(delegationDepth = 0) {
+function conversation(delegationDepth = 0, header = {}) {
   const id = SessionId(`epoch-${crypto.randomUUID()}`)
   const session = Session.create(
     id,
@@ -80,6 +81,7 @@ function conversation(delegationDepth = 0) {
       id,
       createdAt: Date.now(),
       ...delegationDepth === 0 ? {} : { delegationDepth },
+      ...header,
     },
   )
   const large = 'older repository work '.repeat(350)
@@ -117,7 +119,7 @@ function conversation(delegationDepth = 0) {
   return session
 }
 
-function harness(includeTailReasoning) {
+function harness(includeTailReasoning, config = {}) {
   const ctx = new Context()
   void new LlmRuntime(ctx)
   void new TokenMeter(ctx)
@@ -127,6 +129,7 @@ function harness(includeTailReasoning) {
     thresholdRatio: 0.8,
     retainTokens: 1,
     includeTailReasoning,
+    ...config,
   })
   return { ctx, engine }
 }
@@ -218,6 +221,20 @@ test('serializeRecentTail preserves order and changes only reasoning policy', ()
   assert.match(withReasoning, /PRIVATE-TAIL-REASONING/)
 })
 
+test('retained records drop the old deferred-persona footer before it is reattached', () => {
+  const persona = 'You are a reviewer.'
+  const message = createUserMessage({
+    content: [{ type: 'text', text: `Inspect the patch.${deferredPersonaFooter(persona)}` }],
+    source: { kind: 'user' },
+  })
+  const text = serializeRecentTail([message], false, persona)
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
+    .join('')
+  assert.match(text, /Inspect the patch\./u)
+  assert.doesNotMatch(text, /Role guidance for this delegated task/u)
+})
+
 test('tool calls and results become plain chronological records', () => {
   const callId = CallId('tail-call')
   const assistant = createMessage({
@@ -292,6 +309,47 @@ test('automatic compaction skips delegated sessions by default', async () => {
   assert.deepEqual(delegated.surface.nodes, before)
 })
 
+test('fresh local subagents compact into Minimal handoffs with one deferred persona', async () => {
+  const { engine } = harness(false, { subagentMode: 'fresh' })
+  const delegated = conversation(1, { origin: 'subagent' })
+  delegated.append('epoch-reanchor/agent-context', {
+    version: 1,
+    persona: 'You are a meticulous reviewer.',
+  })
+  const result = await engine.compactIfNeeded(
+    { session: delegated, options: { provider: MODEL, model: MODEL } },
+    'pressure',
+    SIGNAL,
+  )
+  assert.ok(result)
+  const text = delegated.deriveMessages()[0].content
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
+    .join('')
+  assert.match(text, /Role guidance for this delegated task:\nYou are a meticulous reviewer\./u)
+  assert.equal(text.match(/Role guidance for this delegated task:/gu)?.length, 1)
+  assert.equal(
+    delegated.requestHeader()?.system,
+    'You are a helpful software engineer assistant.',
+  )
+})
+
+test('fork-seeded children remain outside fresh compaction mode', async () => {
+  const { engine } = harness(false, { subagentMode: 'fresh' })
+  const forked = conversation(1, {
+    origin: 'subagent',
+    seedLength: 1,
+  })
+  const before = [...forked.surface.nodes]
+  const result = await engine.compactIfNeeded(
+    { session: forked, options: { provider: MODEL, model: MODEL } },
+    'pressure',
+    SIGNAL,
+  )
+  assert.equal(result, null)
+  assert.deepEqual(forked.surface.nodes, before)
+})
+
 test('summary failure closes the transaction without changing the surface', async () => {
   const { engine } = harness(false)
   const session = conversation()
@@ -330,6 +388,7 @@ test('the packaged presets gate a complete Standard catalog behind the first too
     'utf8',
   )
   const requiredRows = [
+    'dsh-epoch-reanchor/subagent-epoch',
     'dsh-epoch-reanchor/tool-bootstrap',
     'dsh-epoch-reanchor/windows-bash',
     '@deepseek-ai/dsh-agent-instructions',
@@ -354,6 +413,7 @@ test('the packaged presets gate a complete Standard catalog behind the first too
   assert.match(preset, /bashPath: !!js ctx\.epochReanchorSettings\.gitBashPath/u)
   assert.ok(preset.indexOf('dsh-epoch-reanchor/tool-bootstrap') < preset.indexOf('@deepseek-ai/dsh-agent-instructions'))
   assert.ok(preset.indexOf('dsh-epoch-reanchor/tool-bootstrap') < preset.indexOf('@deepseek-ai/dsh-tool-skill'))
+  assert.match(preset, /subagentMode: fresh/gu)
 })
 
 test('the bundle installs only the process-global restart-scoped settings service', async () => {

@@ -8,6 +8,8 @@ At the compaction boundary, the plugin ends the old model-visible trajectory, re
 
 Apart from rebuilding model-visible history, the plugin tries to preserve the official repository's verifiable environment traits throughout the task: the Minimal system, platform shell/editor bootstrap, Standard tool surface after the first tool call, and the official compaction pressure, tail, and cache-replay behavior. It does not claim exact semantics that the host platform cannot provide.
 
+Local children that do not inherit a parent transcript use the same epoch rules. When a child has a custom persona, the plugin keeps its system Minimal and deterministically places that persona at the end of the ordinary user task/handoff. Model-hidden agent state restores it after every compaction.
+
 Session identity, workspace, raw events, and UI history remain continuous. Only the model-visible message history is rebuilt. The official AgentLoop is not replaced.
 
 > [!IMPORTANT]
@@ -49,6 +51,13 @@ User:   earlier task state + recent interaction records
 ```
 
 After the first durable `tool/call`, the next request exposes the official Standard preset's tool catalog. A successful compaction closes the gate again. Automatic AGENTS digests and the skill catalog are suppressed on the bootstrap request and restored after promotion; `<compacted-summary>`, internal compaction details, and runtime snapshots are never injected.
+
+### Subagent boundary
+
+- A fresh local child (normally `spawn`) starts with the Minimal system and platform tool pair, then promotes only to tools allowed by its `toolFilter`.
+- A custom persona becomes a lower-priority user-role task condition instead of a system instruction. This is an intentional experimental variable, not equivalent to official persona semantics.
+- If `toolFilter` removes either required bootstrap tool, the experimental child fails loudly rather than silently producing an unaligned trajectory.
+- Seeded `fork` children and external Codex, Claude Code, or ACP providers retain official behavior and are outside the fresh-epoch comparison.
 
 ## A/B presets
 
@@ -145,7 +154,7 @@ npm test
 npm pack --dry-run
 ```
 
-Tests cover full-surface replacement, the official tail boundary, reasoning A/B, tool-record conversion, repeated compaction, failure rollback, the epoch tool gate, full-catalog promotion, and single-variable preset parity.
+Tests also cover fresh-child Minimal systems, deferred persona restoration across epochs, independent tool gates, `toolFilter` failure, fork isolation, and single-variable preset parity.
 
 ## Limitations
 
@@ -153,6 +162,8 @@ Tests cover full-surface replacement, the official tail boundary, reasoning A/B,
 - If the model never calls a tool, that epoch remains on the two-tool surface.
 - Whether opening the full Standard catalog changes `We/Let's` traits requires testing.
 - Role flattening does not remove semantic influence from retained text.
+- A user-role persona may be followed less strongly than the official system persona.
+- Forked and external providers are outside the fresh Subagent Epoch experiment.
 - Native Windows `pwsh` mode is not Linux persistent Bash.
 - Optional Git Bash mode starts a fresh process per call and is not Linux persistent Bash either.
 - DSH is a developer preview; recheck APIs and preset composition after upgrades.

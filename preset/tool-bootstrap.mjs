@@ -1,15 +1,26 @@
 /**
- * Keep the first request of every top-level trajectory epoch on the official
+ * Keep the first request of every admitted trajectory epoch on the official
  * Minimal tool pair. The first durable tool call opens the complete catalog
  * assembled by the preset. A successful compaction starts a new gated epoch.
  */
+
+import {
+  includesSessionInEpochMode,
+  isLocalSubagentSession,
+  resolveSubagentEpochMode,
+} from '../lib/subagent-mode.js'
 
 export const name = 'epoch-tool-bootstrap'
 export const inject = []
 
 const DEFAULT_BOOTSTRAP_TOOLS = ['bash', 'str_replace_editor']
 const DEFAULT_SUPPRESSED_SOURCES = ['agent-instructions', 'skill-catalog']
-const ALLOWED_KEYS = new Set(['bootstrapTools', 'suppressedContextSources', 'includeSubagents'])
+const ALLOWED_KEYS = new Set([
+  'bootstrapTools',
+  'suppressedContextSources',
+  'subagentMode',
+  'includeSubagents',
+])
 
 function nonEmptyStrings(value, field, fallback, allowEmpty = false) {
   if (value === undefined) return [...fallback]
@@ -38,13 +49,13 @@ function foldPromotion(events) {
   return promoted
 }
 
-function createPromotionTracker(includeSubagents) {
+function createPromotionTracker(subagentMode) {
   const states = new WeakMap()
 
   const sessionFor = (agent) => {
     const session = agent?.session
     if (session === undefined || session === null || typeof session !== 'object') return undefined
-    if (!includeSubagents && (session.header?.delegationDepth ?? 0) > 0) return undefined
+    if (!includesSessionInEpochMode(session, subagentMode)) return undefined
     return session
   }
 
@@ -60,7 +71,7 @@ function createPromotionTracker(includeSubagents) {
     },
     observe(session, event) {
       if (session === undefined || session === null || typeof session !== 'object') return
-      if (!includeSubagents && (session.header?.delegationDepth ?? 0) > 0) return
+      if (!includesSessionInEpochMode(session, subagentMode)) return
       if (!states.has(session)) return
       if (successfulBoundary(event)) {
         states.set(session, false)
@@ -78,9 +89,11 @@ export function apply(ctx, config) {
   }
   const unknown = Object.keys(source).filter(key => !ALLOWED_KEYS.has(key))
   if (unknown.length > 0) throw new TypeError(`${name}: unknown config key(s): ${unknown.join(', ')}`)
-  if (source.includeSubagents !== undefined && typeof source.includeSubagents !== 'boolean') {
-    throw new TypeError(`${name}: includeSubagents must be a boolean`)
-  }
+  const subagentMode = resolveSubagentEpochMode(
+    source.subagentMode,
+    source.includeSubagents,
+    name,
+  )
 
   const bootstrapTools = nonEmptyStrings(
     source.bootstrapTools,
@@ -93,7 +106,7 @@ export function apply(ctx, config) {
     DEFAULT_SUPPRESSED_SOURCES,
     true,
   ))
-  const promotion = createPromotionTracker(source.includeSubagents === true)
+  const promotion = createPromotionTracker(subagentMode)
   ctx.on('session/event', (session, event) => promotion.observe(session, event))
 
   let warned = false
@@ -109,17 +122,27 @@ export function apply(ctx, config) {
 
   ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
     const assembled = await next()
+    const session = context.agent?.session
+    const strictChild = session !== undefined
+      && isLocalSubagentSession(session)
+      && includesSessionInEpochMode(session, subagentMode)
     try {
       if (promotion.promoted(context.agent)) return assembled
       const available = new Set(assembled.tools.map(tool => tool.name))
       const missing = bootstrapTools.filter(toolName => !available.has(toolName))
       if (missing.length > 0) {
+        if (strictChild) {
+          throw new Error(
+            `${name}: fresh subagent is missing required bootstrap tools ${JSON.stringify(missing)}`,
+          )
+        }
         warnOnce(`${name}: missing bootstrap tools ${JSON.stringify(missing)}; exposing the full catalog`)
         return assembled
       }
       const keep = new Set(bootstrapTools)
       return { ...assembled, tools: assembled.tools.filter(tool => keep.has(tool.name)) }
     } catch (error) {
+      if (strictChild) throw error
       warnOnce(`${name}: tool filtering failed; exposing the full catalog: ${String(error)}`)
       return assembled
     }
